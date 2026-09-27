@@ -2,23 +2,25 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { connectDB } from "./config/db";
+import authRoutes from "./routes/authRoutes";
+import sellerRoutes from "./routes/sellerRoutes";
+import productRoutes from "./routes/productRoutes";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Health check route
 app.get("/health", (req: Request, res: Response) => {
-  res.status(200).json({
-    status: "ok",
-    message: "Kakinada Marketplace API is running",
-  });
+  res.status(200).json({ status: "ok", message: "Kakinada Marketplace API is running" });
 });
+
+app.use("/api/auth", authRoutes);
+app.use("/api/seller", sellerRoutes);
+app.use("/api/products", productRoutes);
 
 const startServer = async (): Promise<void> => {
   await connectDB();
