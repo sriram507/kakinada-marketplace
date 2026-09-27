@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import { Types } from "mongoose";
 import { Product } from "../models/Product";
 import { Seller } from "../models/Seller";
@@ -119,5 +119,76 @@ export const approveProduct = async (req: AuthRequest, res: Response): Promise<v
     res.status(200).json({ message: "Product approved", product });
   } catch (error) {
     res.status(500).json({ message: "Approval failed", error: (error as Error).message });
+  }
+};
+
+export const getPublicProducts = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { category, search, page = "1", limit = "20" } = req.query;
+
+    const filter: Record<string, unknown> = { isApproved: true, isActive: true };
+
+    if (category && typeof category === "string") {
+      filter.category = category;
+    }
+
+    if (search && typeof search === "string") {
+      filter.name = { $regex: search, $options: "i" };
+    }
+
+    const pageNum = parseInt(page as string, 10) || 1;
+    const limitNum = parseInt(limit as string, 10) || 20;
+    const skip = (pageNum - 1) * limitNum;
+
+    const [products, total] = await Promise.all([
+      Product.find(filter)
+        .populate("sellerId", "shopName")
+        .skip(skip)
+        .limit(limitNum)
+        .sort({ createdAt: -1 }),
+      Product.countDocuments(filter),
+    ]);
+
+    res.status(200).json({
+      products,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch products", error: (error as Error).message });
+  }
+};
+
+export const getPublicProductById = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const product = await Product.findOne({
+      _id: id,
+      isApproved: true,
+      isActive: true,
+    }).populate("sellerId", "shopName address");
+
+    if (!product) {
+      res.status(404).json({ message: "Product not found" });
+      return;
+    }
+
+    res.status(200).json({ product });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch product", error: (error as Error).message });
+  }
+};
+
+export const getCategories = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const categories = await Product.distinct("category", { isApproved: true, isActive: true });
+    res.status(200).json({ categories });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch categories", error: (error as Error).message });
   }
 };
