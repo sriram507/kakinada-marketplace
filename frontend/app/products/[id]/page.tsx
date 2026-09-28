@@ -1,5 +1,6 @@
 import { Product } from "@/types/product";
 import { notFound } from "next/navigation";
+import AddToCartButton from "@/components/AddToCartButton";
 
 async function getProduct(id: string): Promise<Product | null> {
   const res = await fetch(`http://localhost:5000/api/products/public/${id}`, {
@@ -51,9 +52,11 @@ export default async function ProductDetailPage({
 
       <p className="mt-4 text-gray-700 leading-relaxed">{product.description}</p>
 
-      <p className="mt-4 text-sm text-gray-500">
+      <p className="mt-2 text-sm text-gray-500">
         {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
       </p>
+
+      <AddToCartButton product={product} />
     </main>
   );
 }
