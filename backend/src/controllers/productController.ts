@@ -122,9 +122,16 @@ export const approveProduct = async (req: AuthRequest, res: Response): Promise<v
   }
 };
 
+const SORT_OPTIONS: Record<string, Record<string, 1 | -1>> = {
+  newest: { createdAt: -1 },
+  price_asc: { price: 1 },
+  price_desc: { price: -1 },
+  name_asc: { name: 1 },
+};
+
 export const getPublicProducts = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { category, search, page = "1", limit = "20" } = req.query;
+    const { category, search, page = "1", limit = "20", sort = "newest" } = req.query;
 
     const filter: Record<string, unknown> = { isApproved: true, isActive: true };
 
@@ -136,6 +143,8 @@ export const getPublicProducts = async (req: Request, res: Response): Promise<vo
       filter.name = { $regex: search, $options: "i" };
     }
 
+    const sortOption = SORT_OPTIONS[sort as string] ?? SORT_OPTIONS.newest;
+
     const pageNum = parseInt(page as string, 10) || 1;
     const limitNum = parseInt(limit as string, 10) || 20;
     const skip = (pageNum - 1) * limitNum;
@@ -143,9 +152,9 @@ export const getPublicProducts = async (req: Request, res: Response): Promise<vo
     const [products, total] = await Promise.all([
       Product.find(filter)
         .populate("sellerId", "shopName")
+        .sort(sortOption)
         .skip(skip)
-        .limit(limitNum)
-        .sort({ createdAt: -1 }),
+        .limit(limitNum),
       Product.countDocuments(filter),
     ]);
 

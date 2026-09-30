@@ -1,8 +1,15 @@
 import { Router } from "express";
-import { applyAsSeller, getPendingSellers, approveSeller } from "../controllers/sellerController";
+import {
+  applyAsSeller,
+  getPendingSellers,
+  approveSeller,
+  getPublicSellers,
+} from "../controllers/sellerController";
 import { protect, authorize } from "../middleware/authMiddleware";
 
 const router = Router();
+
+router.get("/public", getPublicSellers);
 
 router.post("/apply", protect, applyAsSeller);
 router.get("/pending", protect, authorize("admin"), getPendingSellers);

@@ -1,5 +1,7 @@
 import { Product } from "@/types/product";
-import Link from "next/link";
+import ProductCard from "@/components/ProductCard";
+import Pagination from "@/components/Pagination";
+import SectionHeading from "@/components/SectionHeading";
 
 interface ProductsResponse {
   products: Product[];
@@ -11,10 +13,24 @@ interface ProductsResponse {
   };
 }
 
-async function getProducts(category?: string, search?: string): Promise<ProductsResponse> {
+const SORT_LABELS: Record<string, string> = {
+  newest: "Newest",
+  price_asc: "Price: Low to High",
+  price_desc: "Price: High to Low",
+  name_asc: "Name: A to Z",
+};
+
+async function getProducts(
+  category?: string,
+  search?: string,
+  page?: string,
+  sort?: string
+): Promise<ProductsResponse> {
   const params = new URLSearchParams();
   if (category) params.set("category", category);
   if (search) params.set("search", search);
+  if (page) params.set("page", page);
+  if (sort) params.set("sort", sort);
 
   const res = await fetch(
     `http://localhost:5000/api/products/public?${params.toString()}`,
@@ -44,76 +60,95 @@ async function getCategories(): Promise<string[]> {
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; search?: string }>;
+  searchParams: Promise<{ category?: string; search?: string; page?: string; sort?: string }>;
 }) {
-  const { category, search } = await searchParams;
+  const { category, search, page, sort } = await searchParams;
 
-  const [{ products }, categories] = await Promise.all([
-    getProducts(category, search),
+  const [{ products, pagination }, categories] = await Promise.all([
+    getProducts(category, search, page, sort),
     getCategories(),
   ]);
 
-  return (
-    <main className="min-h-screen p-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">All Products</h1>
+  const buildHref = (targetPage: number) => {
+    const params = new URLSearchParams();
+    if (category) params.set("category", category);
+    if (search) params.set("search", search);
+    if (sort) params.set("sort", sort);
+    if (targetPage > 1) params.set("page", String(targetPage));
+    const qs = params.toString();
+    return qs ? `/products?${qs}` : "/products";
+  };
 
-      <form className="flex flex-col sm:flex-row gap-3 mb-6" method="get">
+  return (
+    <main className="min-h-screen p-6 sm:p-8 max-w-6xl mx-auto">
+      <SectionHeading
+        eyebrow={category || "All items"}
+        title={search ? `Results for "${search}"` : "All Products"}
+      />
+
+      <form className="mb-6 space-y-3" method="get">
         <input
           type="text"
           name="search"
           placeholder="Search products..."
           defaultValue={search ?? ""}
-          className="border rounded px-3 py-2 flex-1"
+          className="border border-gray-200 rounded-full px-4 py-2.5 w-full focus:outline-none focus:border-emerald-500"
         />
 
-        <select
-          name="category"
-          defaultValue={category ?? ""}
-          className="border rounded px-3 py-2"
-        >
-          <option value="">All Categories</option>
-          {categories.map((cat) => (
-            <option key={cat} value={cat}>
-              {cat}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-wrap gap-3">
+          <select
+            name="category"
+            defaultValue={category ?? ""}
+            className="border border-gray-200 rounded-full px-4 py-2 text-sm"
+          >
+            <option value="">All Categories</option>
+            {categories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
 
-        <button
-          type="submit"
-          className="bg-gray-900 text-white rounded px-4 py-2 hover:bg-gray-700"
-        >
-          Filter
-        </button>
+          <select
+            name="sort"
+            defaultValue={sort ?? "newest"}
+            className="border border-gray-200 rounded-full px-4 py-2 text-sm"
+          >
+            {Object.entries(SORT_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+
+          <button
+            type="submit"
+            className="bg-emerald-600 text-white rounded-full px-5 py-2 text-sm font-semibold hover:bg-emerald-700 transition"
+          >
+            Apply
+          </button>
+        </div>
       </form>
 
+      <p className="text-sm text-gray-500 mb-4">
+        {pagination.total} {pagination.total === 1 ? "product" : "products"} found
+      </p>
+
       {products.length === 0 ? (
-        <p className="text-gray-500">No products found.</p>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {products.map((product) => (
-            <Link
-              key={product._id}
-              href={`/products/${product._id}`}
-              className="border rounded-lg p-4 shadow-sm hover:shadow-md transition block"
-            >
-              <div className="h-40 bg-gray-100 rounded mb-3 flex items-center justify-center text-gray-400 text-sm">
-                {product.imageUrl ? (
-                  <img
-                    src={product.imageUrl}
-                    alt={product.name}
-                    className="h-full w-full object-cover rounded"
-                  />
-                ) : (
-                  "No image"
-                )}
-              </div>
-              <h2 className="font-semibold text-gray-900">{product.name}</h2>
-              <p className="text-sm text-gray-500">{product.sellerId.shopName}</p>
-              <p className="mt-1 font-bold text-gray-900">₹{product.price}</p>
-            </Link>
-          ))}
+        <div className="text-center py-16">
+          <p className="text-gray-500">No products found.</p>
+          <p className="text-sm text-gray-400 mt-1">Try a different search or category.</p>
         </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {products.map((product) => (
+              <ProductCard key={product._id} product={product} />
+            ))}
+          </div>
+
+          <Pagination page={pagination.page} totalPages={pagination.totalPages} buildHref={buildHref} />
+        </>
       )}
     </main>
   );

@@ -110,10 +110,40 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
 
 export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const orders = await Order.find({ customerId: req.user!.id }).sort({ createdAt: -1 });
+    const orders = await Order.find({ customerId: req.user!.id })
+      .select("-commissionRate -commissionAmount")
+      .sort({ createdAt: -1 });
     res.status(200).json({ count: orders.length, orders });
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch orders", error: (error as Error).message });
+  }
+};
+
+export const getOrderById = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!Types.ObjectId.isValid(id)) {
+      res.status(404).json({ message: "Order not found" });
+      return;
+    }
+
+    // Customers can only open their own orders; admins can open any
+    const filter: Record<string, unknown> = { _id: id };
+    if (req.user!.role !== "admin") {
+      filter.customerId = req.user!.id;
+    }
+
+    const order = await Order.findOne(filter).select("-commissionRate -commissionAmount");
+
+    if (!order) {
+      res.status(404).json({ message: "Order not found" });
+      return;
+    }
+
+    res.status(200).json({ order });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch order", error: (error as Error).message });
   }
 };
 
