@@ -6,7 +6,7 @@ import authRoutes from "./routes/authRoutes";
 import sellerRoutes from "./routes/sellerRoutes";
 import productRoutes from "./routes/productRoutes";
 import orderRoutes from "./routes/orderRoutes";
-
+import paymentRoutes from "./routes/paymentRoutes";
 
 dotenv.config();
 
@@ -24,6 +24,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/seller", sellerRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/payments", paymentRoutes);
 const startServer = async (): Promise<void> => {
   await connectDB();
   app.listen(PORT, () => {

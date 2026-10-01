@@ -5,6 +5,7 @@ import { Seller } from "../models/Seller";
 import { Order, IOrderItem } from "../models/Order";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { COMMISSION_RATE, DELIVERY_CHARGE } from "../config/businessRules";
+import { getPaymentService } from "../services/payment";
 
 interface CartItemInput {
   productId: string;
@@ -87,7 +88,7 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
     const commissionAmount = Math.round(itemsTotal * COMMISSION_RATE * 100) / 100;
     const grandTotal = itemsTotal + DELIVERY_CHARGE;
 
-    // Step 4: create the order
+    // Step 4: create the order — always starts pending, never pre-marked paid
     const order = await Order.create({
       customerId: req.user!.id,
       items: orderItems,
@@ -96,12 +97,41 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
       commissionRate: COMMISSION_RATE,
       commissionAmount,
       grandTotal,
-      status: paymentMethod === "cod" ? "pending" : "paid", // real payment verification comes in Stage 5
+      status: "pending",
       deliveryAddress,
       deliveryPhone,
       paymentMethod,
+      paymentStatus: "pending",
     });
 
+    // Step 5: for online payment, create a payment order and attach it — never mark paid here
+    if (paymentMethod === "online") {
+      const payments = getPaymentService();
+
+      const paymentOrder = await payments.createPaymentOrder({
+        amount: grandTotal,
+        currency: "INR",
+        receipt: order.id,
+      });
+
+      order.paymentProvider = payments.provider;
+      order.providerOrderId = paymentOrder.providerOrderId;
+      await order.save();
+
+      res.status(201).json({
+        message: "Order created, payment required",
+        order,
+        payment: {
+          provider: payments.provider,
+          providerOrderId: paymentOrder.providerOrderId,
+          amount: paymentOrder.amount,
+          currency: paymentOrder.currency,
+        },
+      });
+      return;
+    }
+
+    // Cash on Delivery — order is placed, payment happens on delivery
     res.status(201).json({ message: "Order placed successfully", order });
   } catch (error) {
     res.status(500).json({ message: "Order creation failed", error: (error as Error).message });
@@ -128,7 +158,6 @@ export const getOrderById = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    // Customers can only open their own orders; admins can open any
     const filter: Record<string, unknown> = { _id: id };
     if (req.user!.role !== "admin") {
       filter.customerId = req.user!.id;
@@ -177,5 +206,43 @@ export const getSellerOrders = async (req: AuthRequest, res: Response): Promise<
     res.status(200).json({ count: sellerView.length, orders: sellerView });
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch seller orders", error: (error as Error).message });
+  }
+};
+
+export const cancelOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!Types.ObjectId.isValid(id)) {
+      res.status(404).json({ message: "Order not found" });
+      return;
+    }
+
+    const order = await Order.findOne({ _id: id, customerId: req.user!.id });
+
+    if (!order) {
+      res.status(404).json({ message: "Order not found" });
+      return;
+    }
+
+    if (order.status !== "pending") {
+      res.status(409).json({
+        message: `Cannot cancel an order with status "${order.status}"`,
+      });
+      return;
+    }
+
+    for (const item of order.items) {
+      await Product.findByIdAndUpdate(item.productId, {
+        $inc: { stock: item.quantity },
+      });
+    }
+
+    order.status = "cancelled";
+    await order.save();
+
+    res.status(200).json({ message: "Order cancelled", order });
+  } catch (error) {
+    res.status(500).json({ message: "Cancellation failed", error: (error as Error).message });
   }
 };

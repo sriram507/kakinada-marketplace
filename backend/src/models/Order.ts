@@ -2,6 +2,7 @@ import mongoose, { Document, Schema, Types } from "mongoose";
 
 export type OrderStatus = "pending" | "paid" | "shipped" | "delivered" | "cancelled";
 export type PaymentMethod = "cod" | "online";
+export type PaymentStatus = "pending" | "paid" | "failed";
 
 export interface IOrderItem {
   sellerId: Types.ObjectId;
@@ -23,6 +24,10 @@ export interface IOrder extends Document {
   deliveryAddress: string;
   deliveryPhone: string;
   paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
+  paymentProvider?: string;
+  providerOrderId?: string;
+  providerPaymentId?: string;
 }
 
 const orderItemSchema = new Schema<IOrderItem>(
@@ -53,6 +58,14 @@ const orderSchema = new Schema<IOrder>(
     deliveryAddress: { type: String, required: true, trim: true },
     deliveryPhone: { type: String, required: true, trim: true },
     paymentMethod: { type: String, enum: ["cod", "online"], required: true },
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid", "failed"],
+      default: "pending",
+    },
+    paymentProvider: { type: String },
+    providerOrderId: { type: String },
+    providerPaymentId: { type: String },
   },
   { timestamps: true }
 );

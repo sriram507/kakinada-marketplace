@@ -16,5 +16,13 @@ export interface Order {
   deliveryPhone: string;
   paymentMethod: "cod" | "online";
   paymentStatus?: "pending" | "paid" | "failed";
+  providerOrderId?: string;
   createdAt: string;
+}
+
+export interface PaymentOrderInfo {
+  provider: string;
+  providerOrderId: string;
+  amount: number;
+  currency: string;
 }

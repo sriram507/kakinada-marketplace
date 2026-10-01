@@ -5,6 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
+import { PaymentOrderInfo } from "@/types/order";
+import MockPaymentScreen from "@/components/MockPaymentScreen";
+
+interface OrderResponse {
+  order: { _id: string; grandTotal: number };
+  payment?: PaymentOrderInfo;
+}
 
 export default function CheckoutPage() {
   const { user, token, loading: authLoading } = useAuth();
@@ -16,22 +23,25 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "online">("cod");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Three possible screens after submitting: awaiting payment, success, or neither (the form)
+  const [pendingPayment, setPendingPayment] = useState<{
+    orderId: string;
+    payment: PaymentOrderInfo;
+  } | null>(null);
   const [placedOrder, setPlacedOrder] = useState<{ grandTotal: number } | null>(null);
 
-  // Option B enforcement: redirect to login if not authenticated,
-  // and come back to /checkout afterward.
   useEffect(() => {
     if (!authLoading && !user) {
       router.push("/login?redirect=/checkout");
     }
   }, [authLoading, user, router]);
 
-  // Empty cart (and no order just placed) -> back to the cart page.
   useEffect(() => {
-    if (!authLoading && user && items.length === 0 && !placedOrder) {
+    if (!authLoading && user && items.length === 0 && !placedOrder && !pendingPayment) {
       router.push("/cart");
     }
-  }, [authLoading, user, items, placedOrder, router]);
+  }, [authLoading, user, items, placedOrder, pendingPayment, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,14 +63,19 @@ export default function CheckoutPage() {
         }),
       });
 
-      const data = await res.json();
+      const data: OrderResponse & { message?: string } = await res.json();
 
       if (!res.ok) {
         throw new Error(data.message || "Order failed");
       }
 
-      setPlacedOrder(data.order);
-      clearCart();
+      if (paymentMethod === "online" && data.payment) {
+        // Don't clear the cart yet — the order isn't paid until verify succeeds
+        setPendingPayment({ orderId: data.order._id, payment: data.payment });
+      } else {
+        setPlacedOrder(data.order);
+        clearCart();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Order failed");
     } finally {
@@ -68,13 +83,71 @@ export default function CheckoutPage() {
     }
   };
 
+  const handlePaySuccess = async () => {
+    if (!pendingPayment) return;
+
+    try {
+      const res = await fetch("http://localhost:5000/api/payments/verify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          orderId: pendingPayment.orderId,
+          // In real Razorpay (Step 5) these come from the actual payment popup's result.
+          // The mock provider accepts this exact fixed pair as a "successful" payment.
+          providerPaymentId: `mock_pay_${Date.now()}`,
+          signature: "mock_signature_ok",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Payment verification failed");
+      }
+
+      setPlacedOrder(data.order);
+      setPendingPayment(null);
+      clearCart();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Payment verification failed");
+      setPendingPayment(null);
+    }
+  };
+
+  const handlePayCancel = async () => {
+    if (!pendingPayment) return;
+
+    try {
+      await fetch(`http://localhost:5000/api/orders/${pendingPayment.orderId}/cancel`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } finally {
+      setPendingPayment(null);
+      router.push("/cart");
+    }
+  };
+
   if (authLoading || !user) {
     return null;
   }
 
+  if (pendingPayment) {
+    return (
+      <MockPaymentScreen
+        payment={pendingPayment.payment}
+        onPaySuccess={handlePaySuccess}
+        onCancel={handlePayCancel}
+      />
+    );
+  }
+
   if (placedOrder) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-8">
+      <main className="min-h-[60vh] flex items-center justify-center p-8">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900">Order Placed!</h1>
           <p className="mt-2 text-gray-600">
@@ -82,7 +155,7 @@ export default function CheckoutPage() {
           </p>
           <Link
             href="/products"
-            className="inline-block mt-6 bg-gray-900 text-white rounded px-5 py-2 hover:bg-gray-700"
+            className="inline-block mt-6 bg-emerald-600 text-white rounded-full px-6 py-3 font-semibold hover:bg-emerald-700 transition"
           >
             Continue Shopping
           </Link>
@@ -92,12 +165,12 @@ export default function CheckoutPage() {
   }
 
   return (
-    <main className="min-h-screen p-8 max-w-lg mx-auto">
+    <main className="min-h-screen p-6 sm:p-8 max-w-lg mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Checkout</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <p className="bg-red-50 text-red-600 text-sm rounded px-3 py-2">
+          <p className="bg-red-50 text-red-600 text-sm rounded-lg px-3 py-2">
             {error}
           </p>
         )}
@@ -111,7 +184,7 @@ export default function CheckoutPage() {
             onChange={(e) => setDeliveryAddress(e.target.value)}
             required
             rows={3}
-            className="border rounded px-3 py-2 w-full"
+            className="border border-gray-200 rounded-xl px-3 py-2 w-full focus:outline-none focus:border-emerald-500"
           />
         </div>
 
@@ -124,31 +197,37 @@ export default function CheckoutPage() {
             value={deliveryPhone}
             onChange={(e) => setDeliveryPhone(e.target.value)}
             required
-            className="border rounded px-3 py-2 w-full"
+            className="border border-gray-200 rounded-xl px-3 py-2 w-full focus:outline-none focus:border-emerald-500"
           />
         </div>
 
         <div>
-          <label className="block text-sm text-gray-700 mb-1">
+          <label className="block text-sm text-gray-700 mb-2">
             Payment Method
           </label>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={paymentMethod === "cod"}
-                onChange={() => setPaymentMethod("cod")}
-              />
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setPaymentMethod("cod")}
+              className={`border rounded-xl px-4 py-3 text-sm font-medium transition ${
+                paymentMethod === "cod"
+                  ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                  : "border-gray-200 text-gray-600"
+              }`}
+            >
               Cash on Delivery
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={paymentMethod === "online"}
-                onChange={() => setPaymentMethod("online")}
-              />
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentMethod("online")}
+              className={`border rounded-xl px-4 py-3 text-sm font-medium transition ${
+                paymentMethod === "online"
+                  ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                  : "border-gray-200 text-gray-600"
+              }`}
+            >
               Online Payment
-            </label>
+            </button>
           </div>
         </div>
 
@@ -162,7 +241,7 @@ export default function CheckoutPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="bg-gray-900 text-white rounded px-6 py-3 w-full hover:bg-gray-700 disabled:opacity-50"
+          className="bg-emerald-600 text-white rounded-full px-6 py-3 w-full font-semibold hover:bg-emerald-700 transition disabled:opacity-50"
         >
           {submitting ? "Placing order..." : "Place Order"}
         </button>

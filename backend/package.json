@@ -7,7 +7,9 @@
     "dev": "tsx watch src/index.ts",
     "seed:admin": "tsx src/scripts/seedAdmin.ts",
     "seed:demo": "tsx src/scripts/seedDemo.ts",
-"seed:demo:clear": "tsx src/scripts/seedDemo.ts clear"
+"seed:demo:clear": "tsx src/scripts/seedDemo.ts clear",
+"test:payment": "tsx src/scripts/testPayment.ts",
+"cleanup:abandoned": "tsx src/scripts/cleanupAbandonedOrders.ts"
   },
   "keywords": [],
   "author": "",
