@@ -9,7 +9,8 @@
     "seed:demo": "tsx src/scripts/seedDemo.ts",
     "seed:demo:clear": "tsx src/scripts/seedDemo.ts clear",
     "test:payment": "tsx src/scripts/testPayment.ts",
-    "cleanup:abandoned": "tsx src/scripts/cleanupAbandonedOrders.ts"
+    "cleanup:abandoned": "tsx src/scripts/cleanupAbandonedOrders.ts",
+    "test:webhook": "tsx src/scripts/testWebhook.ts"
   },
   "keywords": [],
   "author": "",

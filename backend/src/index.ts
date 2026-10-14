@@ -7,6 +7,7 @@ import sellerRoutes from "./routes/sellerRoutes";
 import productRoutes from "./routes/productRoutes";
 import orderRoutes from "./routes/orderRoutes";
 import paymentRoutes from "./routes/paymentRoutes";
+import { handleRazorpayWebhook } from "./controllers/webhookController";
 
 dotenv.config();
 
@@ -14,13 +15,19 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
+
+// IMPORTANT: this route must be registered BEFORE express.json() below.
+// It needs the raw, unparsed body to verify Razorpay's webhook signature.
+app.post(
+  "/api/payments/webhook",
+  express.raw({ type: "application/json" }),
+  handleRazorpayWebhook
+);
+
 app.use(express.json());
 
 app.get("/health", (req: Request, res: Response) => {
-  res.status(200).json({
-    status: "ok",
-    message: "Kakinada Marketplace API is running",
-  });
+  res.status(200).json({ status: "ok", message: "Kakinada Marketplace API is running" });
 });
 
 app.use("/api/auth", authRoutes);
@@ -31,7 +38,6 @@ app.use("/api/payments", paymentRoutes);
 
 const startServer = async (): Promise<void> => {
   await connectDB();
-
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });

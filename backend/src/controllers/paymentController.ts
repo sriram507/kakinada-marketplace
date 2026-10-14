@@ -34,6 +34,11 @@ export const verifyPayment = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
+    if (order.status === "cancelled") {
+      res.status(409).json({ message: "This order was cancelled and can no longer be paid" });
+      return;
+    }
+
     if (!order.providerOrderId) {
       res.status(400).json({ message: "No payment order exists for this order" });
       return;
