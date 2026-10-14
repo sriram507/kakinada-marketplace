@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { PaymentOrderInfo } from "@/types/order";
 import MockPaymentScreen from "@/components/MockPaymentScreen";
+import RazorpayCheckoutScreen from "@/components/RazorpayCheckoutScreen";
 
 interface OrderResponse {
   order: { _id: string; grandTotal: number };
@@ -24,7 +25,6 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Three possible screens after submitting: awaiting payment, success, or neither (the form)
   const [pendingPayment, setPendingPayment] = useState<{
     orderId: string;
     payment: PaymentOrderInfo;
@@ -70,7 +70,6 @@ export default function CheckoutPage() {
       }
 
       if (paymentMethod === "online" && data.payment) {
-        // Don't clear the cart yet — the order isn't paid until verify succeeds
         setPendingPayment({ orderId: data.order._id, payment: data.payment });
       } else {
         setPlacedOrder(data.order);
@@ -83,7 +82,7 @@ export default function CheckoutPage() {
     }
   };
 
-  const handlePaySuccess = async () => {
+  const verifyPayment = async (providerPaymentId: string, signature: string) => {
     if (!pendingPayment) return;
 
     try {
@@ -95,10 +94,8 @@ export default function CheckoutPage() {
         },
         body: JSON.stringify({
           orderId: pendingPayment.orderId,
-          // In real Razorpay (Step 5) these come from the actual payment popup's result.
-          // The mock provider accepts this exact fixed pair as a "successful" payment.
-          providerPaymentId: `mock_pay_${Date.now()}`,
-          signature: "mock_signature_ok",
+          providerPaymentId,
+          signature,
         }),
       });
 
@@ -115,6 +112,19 @@ export default function CheckoutPage() {
       setError(err instanceof Error ? err.message : "Payment verification failed");
       setPendingPayment(null);
     }
+  };
+
+  // Used by the mock screen — generates a fake-but-accepted payment id/signature pair
+  const handleMockPaySuccess = async () => {
+    await verifyPayment(`mock_pay_${Date.now()}`, "mock_signature_ok");
+  };
+
+  // Used by the real Razorpay screen — receives genuine values from the popup's handler
+  const handleRazorpayPaySuccess = async (result: {
+    providerPaymentId: string;
+    signature: string;
+  }) => {
+    await verifyPayment(result.providerPaymentId, result.signature);
   };
 
   const handlePayCancel = async () => {
@@ -136,10 +146,20 @@ export default function CheckoutPage() {
   }
 
   if (pendingPayment) {
+    if (pendingPayment.payment.provider === "razorpay") {
+      return (
+        <RazorpayCheckoutScreen
+          payment={pendingPayment.payment}
+          onPaySuccess={handleRazorpayPaySuccess}
+          onCancel={handlePayCancel}
+        />
+      );
+    }
+
     return (
       <MockPaymentScreen
         payment={pendingPayment.payment}
-        onPaySuccess={handlePaySuccess}
+        onPaySuccess={handleMockPaySuccess}
         onCancel={handlePayCancel}
       />
     );
