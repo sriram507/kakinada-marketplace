@@ -7,9 +7,9 @@
     "dev": "tsx watch src/index.ts",
     "seed:admin": "tsx src/scripts/seedAdmin.ts",
     "seed:demo": "tsx src/scripts/seedDemo.ts",
-"seed:demo:clear": "tsx src/scripts/seedDemo.ts clear",
-"test:payment": "tsx src/scripts/testPayment.ts",
-"cleanup:abandoned": "tsx src/scripts/cleanupAbandonedOrders.ts"
+    "seed:demo:clear": "tsx src/scripts/seedDemo.ts clear",
+    "test:payment": "tsx src/scripts/testPayment.ts",
+    "cleanup:abandoned": "tsx src/scripts/cleanupAbandonedOrders.ts"
   },
   "keywords": [],
   "author": "",
@@ -30,6 +30,7 @@
     "dotenv": "^18.0.3",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.10.2"
+    "mongoose": "^9.10.2",
+    "razorpay": "^2.9.8"
   }
 }

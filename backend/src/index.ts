@@ -17,7 +17,10 @@ app.use(cors());
 app.use(express.json());
 
 app.get("/health", (req: Request, res: Response) => {
-  res.status(200).json({ status: "ok", message: "Kakinada Marketplace API is running" });
+  res.status(200).json({
+    status: "ok",
+    message: "Kakinada Marketplace API is running",
+  });
 });
 
 app.use("/api/auth", authRoutes);
@@ -25,8 +28,10 @@ app.use("/api/seller", sellerRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/payments", paymentRoutes);
+
 const startServer = async (): Promise<void> => {
   await connectDB();
+
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });

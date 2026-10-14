@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+import crypto from "crypto";
 import { getPaymentService } from "../services/payment";
 import { MOCK_VALID_SIGNATURE } from "../services/payment/MockPaymentService";
 
@@ -15,19 +16,33 @@ const run = async (): Promise<void> => {
   });
   console.log("Created:", order);
 
-  const good = payments.verifyPayment({
-    providerOrderId: order.providerOrderId,
-    providerPaymentId: "mock_pay_123",
-    signature: MOCK_VALID_SIGNATURE,
-  });
-  console.log("Verify with valid signature:", good);
+  const isMock = payments.provider === "mock";
+  const paymentId = isMock ? "mock_pay_123" : "pay_test_123";
 
-  const bad = payments.verifyPayment({
-    providerOrderId: order.providerOrderId,
-    providerPaymentId: "mock_pay_123",
-    signature: "tampered",
-  });
-  console.log("Verify with wrong signature:", bad);
+  const validSignature = isMock
+    ? MOCK_VALID_SIGNATURE
+    : crypto
+        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET as string)
+        .update(`${order.providerOrderId}|${paymentId}`)
+        .digest("hex");
+
+  console.log(
+    "Verify with valid signature:",
+    payments.verifyPayment({
+      providerOrderId: order.providerOrderId,
+      providerPaymentId: paymentId,
+      signature: validSignature,
+    })
+  );
+
+  console.log(
+    "Verify with wrong signature:",
+    payments.verifyPayment({
+      providerOrderId: order.providerOrderId,
+      providerPaymentId: paymentId,
+      signature: "tampered",
+    })
+  );
 
   try {
     await payments.createPaymentOrder({ amount: 0, currency: "INR", receipt: "x" });
@@ -36,4 +51,7 @@ const run = async (): Promise<void> => {
   }
 };
 
-run();
+run().catch((error) => {
+  console.error("Test failed:", error);
+  process.exit(1);
+});
